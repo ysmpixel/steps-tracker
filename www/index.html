@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF8F6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Steps">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Step Tracker</title>
+<style>
+  :root {
+    --bg: #FAF8F6;
+    --card: #FFFFFF;
+    --ink: #1B1B1B;
+    --muted: #77756F;
+    --line: #E6E4DF;
+    --track: #EEEDE9;
+    --green: #2E7040;
+    --green-soft: #E4EFE7;
+    --over: #1F5A31;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  #app { max-width: 480px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; position: relative; }
+  main { flex: 1; overflow-y: auto; padding: calc(20px + env(safe-area-inset-top)) 20px 24px; }
+  .view { display: none; }
+  .view.active { display: block; }
+  h1 { font-size: 40px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); font-weight: 600; font-size: 18px; margin-top: 2px; }
+
+  /* ring */
+  .ring-wrap { position: relative; width: min(78vw, 340px); aspect-ratio: 1; margin: 28px auto 24px; }
+  .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-track { stroke: var(--track); }
+  .ring-bar { stroke: var(--green); transition: stroke-dashoffset .6s ease; }
+  .ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .big { font-size: clamp(48px, 16vw, 68px); font-weight: 800; letter-spacing: -1px; line-height: 1; }
+  .of { color: var(--muted); font-size: 19px; font-weight: 600; margin-top: 8px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 20px 28px 20px 28px; }
+  .card h2 { margin: 0 0 6px; font-size: 22px; font-weight: 800; }
+  .card p { margin: 0; color: var(--muted); font-size: 18px; line-height: 1.4; }
+
+  .btn { width: 100%; border: 0; background: var(--green); color: #fff; font: inherit; font-size: 20px; font-weight: 700;
+    border-radius: 24px; height: 84px; margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer; }
+  .btn:active { transform: scale(.98); }
+  .btn.secondary { background: var(--green-soft); color: var(--green); height: 56px; font-size: 17px; border-radius: 18px; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 18px; text-align: center; padding: 10px 4px 12px; }
+  .stat span { display: block; color: var(--muted); font-weight: 700; font-size: 15px; }
+  .stat b { font-size: 21px; }
+
+  /* history */
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0 14px; }
+  .summary .stat { padding: 14px 8px; }
+  .row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; }
+  .row .d { width: 74px; flex: none; }
+  .row .d b { display: block; font-size: 16px; }
+  .row .d small { color: var(--muted); font-size: 13px; }
+  .bar { flex: 1; height: 10px; background: var(--track); border-radius: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--green); border-radius: 6px; }
+  .row .n { width: 64px; text-align: right; font-weight: 700; font-size: 16px; }
+  .row .n.zero { color: var(--muted); font-weight: 600; }
+  .check { color: var(--green); font-weight: 800; }
+
+  /* goal */
+  .field { margin-top: 24px; }
+  label { display: block; color: var(--muted); font-weight: 700; margin-bottom: 8px; font-size: 15px; }
+  input[type=number] { width: 100%; font: inherit; font-size: 32px; font-weight: 800; padding: 14px 18px;
+    border: 1.5px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); outline: none; }
+  input[type=number]:focus { border-color: var(--green); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 16px; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
+  .hint { color: var(--muted); font-size: 15px; margin-top: 14px; line-height: 1.4; }
+
+  /* nav */
+  nav { display: flex; background: #fff; border-top: 1px solid var(--line); padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); }
+  nav button { flex: 1; background: none; border: 0; font: inherit; font-size: 15px; font-weight: 700; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
+  nav button svg { width: 34px; height: 34px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  nav button.active { color: var(--green); }
+  nav button.active svg { fill: currentColor; }
+  nav button.active svg.line-only { fill: none; }
+
+  /* sheet */
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.35); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bg); border-radius: 28px 28px 0 0;
+    padding: 12px 20px calc(24px + env(safe-area-inset-bottom)); transform: translateY(105%); transition: transform .25s ease; }
+  .sheet.open { transform: none; }
+  .grab { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 16px; }
+  .sheet h3 { margin: 0 0 4px; font-size: 24px; }
+  .seg { display: flex; background: var(--track); border-radius: 14px; padding: 4px; margin: 14px 0 4px; }
+  .seg button { flex: 1; border: 0; background: none; font: inherit; font-weight: 700; padding: 10px; border-radius: 11px; color: var(--muted); cursor: pointer; }
+  .seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .toast { position: absolute; left: 50%; bottom: 110px; transform: translate(-50%, 20px); background: var(--ink); color: #fff;
+    padding: 10px 18px; border-radius: 999px; font-weight: 600; opacity: 0; transition: .25s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <main>
+    <!-- TODAY -->
+    <section class="view active" id="view-today">
+      <h1>Today</h1>
+      <div class="sub" id="today-date"></div>
+      <div class="ring-wrap">
+        <svg viewBox="0 0 200 200">
+          <circle class="ring-track" cx="100" cy="100" r="90" fill="none" stroke-width="16"/>
+          <circle class="ring-bar" id="ring" cx="100" cy="100" r="90" fill="none" stroke-width="16" stroke-linecap="round"/>
+        </svg>
+        <div class="ring-center">
+          <div class="big" id="done-big">0</div>
+          <div class="of" id="of-goal">of 10,000 steps</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 id="due-title">10,000 steps due today</h2>
+        <p id="due-sub">Let's get walking.</p>
+      </div>
+      <button class="btn" id="log-btn">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><ellipse cx="8" cy="9" rx="3.2" ry="4.6" transform="rotate(-8 8 9)"/><ellipse cx="8.6" cy="16.6" rx="2.4" ry="2.4"/><ellipse cx="16" cy="6.5" rx="3" ry="4.2" transform="rotate(8 16 6.5)"/><ellipse cx="15.6" cy="13.6" rx="2.2" ry="2.2"/></svg>
+        Log Steps
+      </button>
+      <div class="stats">
+        <div class="stat"><span>Goal</span><b id="s-goal">0</b></div>
+        <div class="stat"><span>Done</span><b id="s-done">0</b></div>
+        <div class="stat"><span>Due</span><b id="s-due">0</b></div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="view" id="view-history">
+      <h1>History</h1>
+      <div class="sub">Last 30 days</div>
+      <div class="summary">
+        <div class="stat"><span>Daily average</span><b id="h-avg">0</b></div>
+        <div class="stat"><span>Goals hit</span><b id="h-hit">0 / 30</b></div>
+      </div>
+      <div id="h-list"></div>
+      <p class="hint">Tap a day to correct its total.</p>
+    </section>
+
+    <!-- GOAL -->
+    <section class="view" id="view-goal">
+      <h1>Goal</h1>
+      <div class="sub">Your daily target</div>
+      <div class="field">
+        <label for="goal-input">Steps per day</label>
+        <input type="number" id="goal-input" inputmode="numeric" min="100" step="100">
+        <div class="chips">
+          <button class="chip" data-g="5000">5,000</button>
+          <button class="chip" data-g="8000">8,000</button>
+          <button class="chip" data-g="10000">10,000</button>
+          <button class="chip" data-g="12000">12,000</button>
+        </div>
+      </div>
+      <button class="btn" id="goal-save" style="height:64px">Save Goal</button>
+      <p class="hint">This goal stays active every day until you change it. Past days are compared against the goal you have set now.</p>
+    </section>
+  </main>
+
+  <nav>
+    <button data-tab="today" class="active">
+      <svg viewBox="0 0 24 24"><ellipse cx="8" cy="9" rx="3.2" ry="4.6" transform="rotate(-8 8 9)"/><ellipse cx="8.6" cy="16.6" rx="2.4" ry="2.4"/><ellipse cx="16" cy="6.5" rx="3" ry="4.2" transform="rotate(8 16 6.5)"/><ellipse cx="15.6" cy="13.6" rx="2.2" ry="2.2"/></svg>Today</button>
+    <button data-tab="history">
+      <svg class="line-only" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>History</button>
+    <button data-tab="goal">
+      <svg class="line-only" viewBox="0 0 24 24"><path d="M5 21V4M5 4h13l-3 4 3 4H5"/></svg>Goal</button>
+  </nav>
+
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true">
+    <div class="grab"></div>
+    <h3 id="sheet-title">Log steps</h3>
+    <div class="sub" id="sheet-sub" style="font-size:16px"></div>
+    <div class="seg" id="seg">
+      <button data-mode="add" class="on">Add to total</button>
+      <button data-mode="set">Set total</button>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <input type="number" id="steps-input" inputmode="numeric" min="0" placeholder="0">
+    </div>
+    <div class="chips" id="quick">
+      <button class="chip" data-q="500">+500</button>
+      <button class="chip" data-q="1000">+1,000</button>
+      <button class="chip" data-q="2500">+2,500</button>
+      <button class="chip" data-q="5000">+5,000</button>
+    </div>
+    <button class="btn" id="sheet-save" style="height:64px">Save</button>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(() => {
+  const KEY = 'stepTracker.v1';
+  const $ = id => document.getElementById(id);
+  const fmt = n => Math.round(n).toLocaleString('en-US');
+
+  let state = { goal: 10000, days: {} };
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.days) state = { goal: s.goal || 10000, days: s.days }; } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const today = () => iso(new Date());
+  const fromIso = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+
+  // ---- Today ----
+  const R = 90, C = 2 * Math.PI * R;
+  const ring = $('ring');
+  ring.style.strokeDasharray = C;
+
+  function renderToday() {
+    const done = state.days[today()] || 0, goal = state.goal;
+    const due = Math.max(goal - done, 0);
+    const pct = Math.min(done / goal, 1);
+    $('today-date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    $('done-big').textContent = fmt(done);
+    $('of-goal').textContent = `of ${fmt(goal)} steps`;
+    // keep a visible round cap even at 0
+    ring.style.strokeDashoffset = C * (1 - pct);
+    ring.style.opacity = done === 0 ? 0 : 1;
+    if (due > 0) {
+      $('due-title').textContent = `${fmt(due)} steps due today`;
+      $('due-sub').textContent = `${Math.round(pct * 100)}% of your goal done — keep walking.`;
+    } else {
+      $('due-title').textContent = 'Goal reached 🎉';
+      $('due-sub').textContent = done > goal ? `${fmt(done - goal)} steps over your goal. Great work!` : 'You hit your goal for today. Great work!';
+    }
+    $('s-goal').textContent = fmt(goal);
+    $('s-done').textContent = fmt(done);
+    $('s-due').textContent = fmt(due);
+  }
+
+  // ---- History ----
+  function renderHistory() {
+    const list = $('h-list'); list.innerHTML = '';
+    const now = new Date(); let sum = 0, hit = 0, max = state.goal;
+    const days = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const k = iso(d), n = state.days[k] || 0;
+      days.push({ k, d, n }); sum += n; if (n >= state.goal) hit++; max = Math.max(max, n);
+    }
+    $('h-avg').textContent = fmt(sum / 30);
+    $('h-hit').textContent = `${hit} / 30`;
+    days.forEach(({ k, d, n }, i) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : d.toLocaleDateString('en-US', { weekday: 'short' });
+      row.innerHTML = `<div class="d"><b>${label}</b><small>${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</small></div>
+        <div class="bar"><i style="width:${(n / max) * 100}%"></i></div>
+        <div class="n ${n ? '' : 'zero'}">${n ? fmt(n) : '–'}${n >= state.goal ? ' <span class="check">✓</span>' : ''}</div>`;
+      row.onclick = () => openSheet(k, 'set');
+      list.appendChild(row);
+    });
+  }
+
+  // ---- Goal ----
+  function renderGoal() { $('goal-input').value = state.goal; }
+  document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => $('goal-input').value = b.dataset.g);
+  $('goal-save').onclick = () => {
+    const v = Math.round(Number($('goal-input').value));
+    if (!(v >= 100)) return toast('Enter a goal of at least 100');
+    state.goal = v; save(); renderAll(); toast('Goal saved'); show('today');
+  };
+
+  // ---- Sheet ----
+  let sheetDate = today(), mode = 'add';
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+    $('quick').style.display = m === 'add' ? 'flex' : 'none';
+    $('steps-input').value = m === 'set' ? (state.days[sheetDate] || '') : '';
+    $('steps-input').placeholder = m === 'add' ? 'Steps to add' : 'Total for the day';
+  }
+  function openSheet(date, m) {
+    sheetDate = date;
+    const isToday = date === today();
+    $('sheet-title').textContent = isToday ? 'Log steps' : 'Edit day';
+    $('sheet-sub').textContent = (isToday ? 'Today · ' : '') + fromIso(date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) +
+      ` · now ${fmt(state.days[date] || 0)}`;
+    setMode(m);
+    $('seg').style.display = isToday ? 'flex' : 'none';
+    $('scrim').classList.add('open'); $('sheet').classList.add('open');
+    setTimeout(() => $('steps-input').focus(), 250);
+  }
+  const closeSheet = () => { $('scrim').classList.remove('open'); $('sheet').classList.remove('open'); $('steps-input').blur(); };
+  $('scrim').onclick = closeSheet;
+  $('log-btn').onclick = () => openSheet(today(), 'add');
+  document.querySelectorAll('#seg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+    $('steps-input').value = (Number($('steps-input').value) || 0) + Number(b.dataset.q);
+  });
+  $('sheet-save').onclick = () => {
+    const raw = $('steps-input').value;
+    const v = Math.round(Number(raw));
+    if (raw === '' || !(v >= 0)) return toast('Enter a number of steps');
+    state.days[sheetDate] = mode === 'add' ? (state.days[sheetDate] || 0) + v : v;
+    save(); closeSheet(); renderAll(); toast(mode === 'add' ? `Added ${fmt(v)} steps` : 'Total updated');
+  };
+  $('steps-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('sheet-save').click(); });
+
+  // ---- Nav / misc ----
+  function show(tab) {
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + tab));
+    document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelector('main').scrollTop = 0;
+  }
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.tab));
+  let tt; function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1800); }
+
+  function renderAll() { renderToday(); renderHistory(); renderGoal(); }
+  renderAll();
+  // roll over at midnight / when app returns to foreground
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) renderAll(); });
+
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>

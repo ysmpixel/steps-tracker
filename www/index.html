@@ -25,7 +25,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
     font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
-  #app { max-width: 480px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; position: relative; }
+  #app { max-width: 480px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
   main { flex: 1; overflow-y: auto; padding: calc(20px + env(safe-area-inset-top)) 20px 24px; }
   .view { display: none; }
   .view.active { display: block; }
@@ -102,6 +102,13 @@
   .toast { position: absolute; left: 50%; bottom: 110px; transform: translate(-50%, 20px); background: var(--ink); color: #fff;
     padding: 10px 18px; border-radius: 999px; font-weight: 600; opacity: 0; transition: .25s; pointer-events: none; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  /* walk timer */
+  #walk-panel { display: none; text-align: center; margin-top: 12px; }
+  .walk-time { font-size: 56px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .walk-steps { color: var(--green); font-weight: 700; font-size: 20px; margin-top: 4px; }
+  .walk-note { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .link { background: none; border: 0; font: inherit; font-weight: 700; color: var(--muted); margin-top: 12px; padding: 8px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -129,6 +136,17 @@
         <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><ellipse cx="8" cy="9" rx="3.2" ry="4.6" transform="rotate(-8 8 9)"/><ellipse cx="8.6" cy="16.6" rx="2.4" ry="2.4"/><ellipse cx="16" cy="6.5" rx="3" ry="4.2" transform="rotate(8 16 6.5)"/><ellipse cx="15.6" cy="13.6" rx="2.2" ry="2.2"/></svg>
         Log Steps
       </button>
+      <button class="btn secondary" id="walk-start">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2h5"/></svg>
+        Start Walk Timer
+      </button>
+      <div class="card" id="walk-panel">
+        <div class="walk-time" id="walk-time">00:00</div>
+        <div class="walk-steps" id="walk-steps">≈ 0 steps</div>
+        <div class="walk-note">Estimated at 100 steps per minute</div>
+        <button class="btn" id="walk-stop" style="height:64px">Stop &amp; Log Steps</button>
+        <button class="link" id="walk-discard">Discard walk</button>
+      </div>
       <div class="stats">
         <div class="stat"><span>Goal</span><b id="s-goal">0</b></div>
         <div class="stat"><span>Done</span><b id="s-done">0</b></div>
@@ -308,6 +326,36 @@
   };
   $('steps-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('sheet-save').click(); });
 
+  // ---- Walk timer ----
+  const WALK_KEY = 'stepTracker.walk', STEPS_PER_MIN = 100;
+  let walkStart = null, walkTick = null;
+  try { walkStart = Number(localStorage.getItem(WALK_KEY)) || null; } catch (e) {}
+  const walkSteps = ms => Math.round(ms / 60000 * STEPS_PER_MIN);
+  const setWalkStart = v => { walkStart = v; try { v ? localStorage.setItem(WALK_KEY, String(v)) : localStorage.removeItem(WALK_KEY); } catch (e) {} };
+  function renderWalk() {
+    const running = walkStart !== null;
+    $('walk-start').style.display = running ? 'none' : 'flex';
+    $('walk-panel').style.display = running ? 'block' : 'none';
+    if (!running) { clearInterval(walkTick); walkTick = null; return; }
+    const ms = Date.now() - walkStart, s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60, p = n => String(n).padStart(2, '0');
+    $('walk-time').textContent = h ? `${h}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
+    $('walk-steps').textContent = `≈ ${fmt(walkSteps(ms))} steps`;
+    if (!walkTick) walkTick = setInterval(renderWalk, 1000);
+  }
+  $('walk-start').onclick = () => { setWalkStart(Date.now()); renderWalk(); };
+  $('walk-stop').onclick = () => {
+    const steps = walkSteps(Date.now() - walkStart);
+    setWalkStart(null); renderWalk();
+    if (steps > 0) {
+      state.days[today()] = (state.days[today()] || 0) + steps;
+      save(); renderAll(); toast(`Walk logged: ${fmt(steps)} steps`);
+    } else toast('Walk too short to log');
+  };
+  $('walk-discard').onclick = () => {
+    if (confirm('Discard this walk without logging steps?')) { setWalkStart(null); renderWalk(); }
+  };
+
   // ---- Nav / misc ----
   function show(tab) {
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + tab));
@@ -317,7 +365,7 @@
   document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.tab));
   let tt; function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1800); }
 
-  function renderAll() { renderToday(); renderHistory(); renderGoal(); }
+  function renderAll() { renderToday(); renderHistory(); renderGoal(); renderWalk(); }
   renderAll();
   // roll over at midnight / when app returns to foreground
   document.addEventListener('visibilitychange', () => { if (!document.hidden) renderAll(); });
